@@ -9,6 +9,7 @@ from yolov3_tf2.models import (
 )
 from yolov3_tf2.dataset import transform_images, load_tfrecord_dataset
 from yolov3_tf2.utils import draw_outputs
+import zetane
 
 flags.DEFINE_string('classes', './data/coco.names', 'path to classes file')
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf',
@@ -49,8 +50,27 @@ def main(_argv):
     img = tf.expand_dims(img_raw, 0)
     img = transform_images(img, FLAGS.size)
 
+    ctxt = zetane.Context()
+    ctxt.clear_universe()
+
+    image_np = np.transpose(img.numpy(), (1, 2, 3, 0))
+    zinput = ctxt.image().data(image_np).update()
+    zmodel = ctxt.model().keras(yolo).inputs(img.numpy()).update()
+
     t1 = time.time()
-    boxes, scores, classes, nums = yolo(img)
+    #boxes, scores, classes, nums = yolo(img)
+    bbox, confidence, class_probs, scores = yolo(img)
+    boxes, scores, classes, nums = tf.image.combined_non_max_suppression(
+        boxes=tf.reshape(bbox, (tf.shape(bbox)[0], -1, 1, 4)),
+        scores=tf.reshape(
+            scores, (tf.shape(scores)[0], -1, tf.shape(scores)[-1])),
+        max_output_size_per_class=FLAGS.yolo_max_boxes,
+        max_total_size=FLAGS.yolo_max_boxes,
+        iou_threshold=FLAGS.yolo_iou_threshold,
+        score_threshold=FLAGS.yolo_score_threshold
+    )
+
+
     t2 = time.time()
     logging.info('time: {}'.format(t2 - t1))
 
@@ -60,10 +80,11 @@ def main(_argv):
                                            np.array(scores[0][i]),
                                            np.array(boxes[0][i])))
 
-    img = cv2.cvtColor(img_raw.numpy(), cv2.COLOR_RGB2BGR)
-    img = draw_outputs(img, (boxes, scores, classes, nums), class_names)
-    cv2.imwrite(FLAGS.output, img)
-    logging.info('output saved to: {}'.format(FLAGS.output))
+    out_img = cv2.cvtColor(img_raw.numpy(), cv2.COLOR_RGB2BGR)
+    out_img = draw_outputs(img, (boxes, scores, classes, nums), class_names)
+    zoutput = ctxt.image().data(out_img).update()
+    #cv2.imwrite(FLAGS.output, img)
+    #logging.info('output saved to: {}'.format(FLAGS.output))
 
 
 if __name__ == '__main__':

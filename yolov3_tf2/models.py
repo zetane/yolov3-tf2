@@ -173,6 +173,23 @@ def yolo_boxes(pred, anchors, classes):
 
     return bbox, objectness, class_probs, pred_box
 
+def yolo_nms_onnx(outputs, anchors, masks, classes):
+    # boxes, conf, type
+    b, c, t = [], [], []
+
+    for o in outputs:
+        b.append(tf.reshape(o[0], (tf.shape(o[0])[0], -1, tf.shape(o[0])[-1])))
+        c.append(tf.reshape(o[1], (tf.shape(o[1])[0], -1, tf.shape(o[1])[-1])))
+        t.append(tf.reshape(o[2], (tf.shape(o[2])[0], -1, tf.shape(o[2])[-1])))
+
+    bbox = tf.concat(b, axis=1)
+    confidence = tf.concat(c, axis=1)
+    class_probs = tf.concat(t, axis=1)
+
+    scores = confidence * class_probs
+    print('boxes: ', bbox.shape)
+    print('scores: ', scores.shape)
+    return bbox, confidence, class_probs, scores
 
 def yolo_nms(outputs, anchors, masks, classes):
     # boxes, conf, type
@@ -226,7 +243,7 @@ def YoloV3(size=None, channels=3, anchors=yolo_anchors,
     boxes_2 = Lambda(lambda x: yolo_boxes(x, anchors[masks[2]], classes),
                      name='yolo_boxes_2')(output_2)
 
-    outputs = Lambda(lambda x: yolo_nms(x, anchors, masks, classes),
+    outputs = Lambda(lambda x: yolo_nms_onnx(x, anchors, masks, classes),
                      name='yolo_nms')((boxes_0[:3], boxes_1[:3], boxes_2[:3]))
 
     return Model(inputs, outputs, name='yolov3')
@@ -251,7 +268,7 @@ def YoloV3Tiny(size=None, channels=3, anchors=yolo_tiny_anchors,
                      name='yolo_boxes_0')(output_0)
     boxes_1 = Lambda(lambda x: yolo_boxes(x, anchors[masks[1]], classes),
                      name='yolo_boxes_1')(output_1)
-    outputs = Lambda(lambda x: yolo_nms(x, anchors, masks, classes),
+    outputs = Lambda(lambda x: yolo_nms_onnx(x, anchors, masks, classes),
                      name='yolo_nms')((boxes_0[:3], boxes_1[:3]))
     return Model(inputs, outputs, name='yolov3_tiny')
 
