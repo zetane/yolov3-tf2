@@ -54,7 +54,7 @@ def main(_argv):
     ctxt.clear_universe()
 
     image_np = np.transpose(img.numpy(), (1, 2, 3, 0))
-    zinput = ctxt.image().data(image_np).update()
+    zinput = ctxt.image().scale(x=0.5, y=0.5).position(x=10.0, y=-10.0).data(image_np).update()
     zmodel = ctxt.model().keras(yolo).inputs(img.numpy()).update()
 
     t1 = time.time()
@@ -70,7 +70,6 @@ def main(_argv):
         score_threshold=FLAGS.yolo_score_threshold
     )
 
-
     t2 = time.time()
     logging.info('time: {}'.format(t2 - t1))
 
@@ -80,9 +79,9 @@ def main(_argv):
                                            np.array(scores[0][i]),
                                            np.array(boxes[0][i])))
 
-    out_img = cv2.cvtColor(img_raw.numpy(), cv2.COLOR_RGB2BGR)
-    out_img = draw_outputs(img, (boxes, scores, classes, nums), class_names)
-    zoutput = ctxt.image().data(out_img).update()
+    #out_img = cv2.cvtColor(img_raw.numpy(), cv2.COLOR_RGB2BGR)
+    out_img = draw_outputs(img_raw.numpy()/225.0, (boxes, scores, classes, nums), class_names)
+    zoutput = ctxt.image().position(-10.0, 0.0).scale(0.05, 0.05).data(out_img).update()
     #cv2.imwrite(FLAGS.output, img)
     #logging.info('output saved to: {}'.format(FLAGS.output))
 

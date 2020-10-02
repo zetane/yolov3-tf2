@@ -1,6 +1,8 @@
 import time
 from absl import app, flags, logging
 from absl.flags import FLAGS
+
+import numpy as np
 import cv2
 import tensorflow as tf
 from yolov3_tf2.models import (
@@ -8,6 +10,8 @@ from yolov3_tf2.models import (
 )
 from yolov3_tf2.dataset import transform_images
 from yolov3_tf2.utils import draw_outputs
+
+import zetane
 
 
 flags.DEFINE_string('classes', './data/coco.names', 'path to classes file')
@@ -47,6 +51,10 @@ def main(_argv):
 
     out = None
 
+    ctxt = zetane.Context()
+    ctxt.clear_universe()
+    counter = 0
+
     if FLAGS.output:
         # by default VideoCapture returns float instead of int
         width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -67,18 +75,45 @@ def main(_argv):
         img_in = tf.expand_dims(img_in, 0)
         img_in = transform_images(img_in, FLAGS.size)
 
+        image_np = np.transpose(img_in.numpy(), (1, 2, 3, 0))
+        if counter == 0:
+            zinput = ctxt.image().scale(x=0.25, y=0.25).position(x=0.0, y=0.0).data(image_np).update()
+            zmodel = ctxt.model().keras(yolo).inputs(img_in.numpy()).update()
+        else:
+            zinput.data(image_np).update()
+            zmodel.inputs(img_in.numpy()).update()
+
         t1 = time.time()
-        boxes, scores, classes, nums = yolo.predict(img_in)
+        #boxes, scores, classes, nums = yolo.predict(img_in)
+        bbox, confidence, class_probs, scores = yolo(img_in)
+        boxes, scores, classes, nums = tf.image.combined_non_max_suppression(
+            boxes=tf.reshape(bbox, (tf.shape(bbox)[0], -1, 1, 4)),
+            scores=tf.reshape(
+                scores, (tf.shape(scores)[0], -1, tf.shape(scores)[-1])),
+            max_output_size_per_class=FLAGS.yolo_max_boxes,
+            max_total_size=FLAGS.yolo_max_boxes,
+            iou_threshold=FLAGS.yolo_iou_threshold,
+            score_threshold=FLAGS.yolo_score_threshold
+        )
+
+
         t2 = time.time()
         times.append(t2-t1)
         times = times[-20:]
 
-        img = draw_outputs(img, (boxes, scores, classes, nums), class_names)
-        img = cv2.putText(img, "Time: {:.2f}ms".format(sum(times)/len(times)*1000), (0, 30),
-                          cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
-        if FLAGS.output:
-            out.write(img)
-        cv2.imshow('output', img)
+        out_img = draw_outputs(img/255.0, (boxes, scores, classes, nums), class_names)
+        out_img = cv2.putText(out_img, "Time: {:.2f}ms".format(sum(times)/len(times)*1000), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+
+        if counter == 0:
+            zoutput = ctxt.image().position(x=-15.0, y=0.0).scale(0.15, 0.15).data(out_img).update()
+        else:
+            zoutput.data(out_img).debug();
+
+        #if FLAGS.output:
+        #    out.write(img)
+        #cv2.imshow('output', img)
+
+        counter += 1
         if cv2.waitKey(1) == ord('q'):
             break
 
