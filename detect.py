@@ -21,6 +21,14 @@ flags.DEFINE_string('tfrecord', None, 'tfrecord instead of image')
 flags.DEFINE_string('output', './output.jpg', 'path to output image')
 flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
 
+def make_io_panels(zctxt):
+    input_panel = zctxt.panel('Input', width=0.25, height=0.3, screen_x=0.0, screen_y=0.7, navigation='2d').set_camera(position=(
+        1, 0.75, 30), aim=(1, 0.75, 0)).set_background_color(rgb=(0.025, 0.02, 0.045)).border(3).set_border_alpha(0.05).update()
+    output_panel = zctxt.panel('Output', width=0.25, height=0.3, screen_x=0.0, screen_y=0.0, navigation='2d').set_camera(position=(
+        1, 0.75, 30), aim=(1, 0.75, 0)).set_background_color(rgb=(0.025, 0.02, 0.045)).border(3).set_border_alpha(0.05).update()
+    zctxt.text("Input").font_size(0.1).position(y=-.45).send_to(input_panel).update()
+    zctxt.text("Output").font_size(.1).position(y=-.45).send_to(output_panel).update()
+    return input_panel, output_panel
 
 def main(_argv):
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
@@ -53,8 +61,10 @@ def main(_argv):
     ctxt = zetane.Context()
     ctxt.clear_universe()
 
+    input_panel, output_panel = make_io_panels(ctxt)
     image_np = np.transpose(img.numpy(), (1, 2, 3, 0))
-    zinput = ctxt.image().scale(x=0.5, y=0.5).position(x=10.0, y=-10.0).data(image_np).update()
+    to_fit = 0.15 / image_np.shape[2]
+    zinput = ctxt.image().data(image_np).scale(to_fit, to_fit).send_to(input_panel).update()
     zmodel = ctxt.model().keras(yolo).inputs(img.numpy()).update()
 
     t1 = time.time()
@@ -81,10 +91,13 @@ def main(_argv):
 
     #out_img = cv2.cvtColor(img_raw.numpy(), cv2.COLOR_RGB2BGR)
     out_img = draw_outputs(img_raw.numpy()/225.0, (boxes, scores, classes, nums), class_names)
-    zoutput = ctxt.image().position(-10.0, 0.0).scale(0.05, 0.05).data(out_img).update()
+
+    to_fit = 0.15 / out_img.shape[2]
+    zoutput = ctxt.image().data(out_img).scale(to_fit, to_fit).send_to(output_panel).update()
     #cv2.imwrite(FLAGS.output, img)
     #logging.info('output saved to: {}'.format(FLAGS.output))
 
+    ctxt.disconnect()
 
 if __name__ == '__main__':
     try:

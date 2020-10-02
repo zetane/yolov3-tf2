@@ -25,6 +25,15 @@ flags.DEFINE_string('output', None, 'path to output video')
 flags.DEFINE_string('output_format', 'XVID', 'codec used in VideoWriter when saving video to file')
 flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
 
+def make_io_panels(zctxt):
+    input_panel = zctxt.panel('Input', width=0.25, height=0.3, screen_x=0.0, screen_y=0.7, navigation='2d').set_camera(position=(
+        1, 0.75, 30), aim=(1, 0.75, 0)).set_background_color(rgb=(0.025, 0.02, 0.045)).border(3).set_border_alpha(0.05).update()
+    output_panel = zctxt.panel('Output', width=0.25, height=0.3, screen_x=0.0, screen_y=0.0, navigation='2d').set_camera(position=(
+        1, 0.75, 30), aim=(1, 0.75, 0)).set_background_color(rgb=(0.025, 0.02, 0.045)).border(3).set_border_alpha(0.05).update()
+    zctxt.text("Input").font_size(0.1).position(y=-.45).send_to(input_panel).update()
+    zctxt.text("Output").font_size(.1).position(y=-.45).send_to(output_panel).update()
+    return input_panel, output_panel
+
 
 def main(_argv):
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
@@ -53,6 +62,8 @@ def main(_argv):
 
     ctxt = zetane.Context()
     ctxt.clear_universe()
+    input_panel, output_panel = make_io_panels(ctxt)
+
     counter = 0
 
     if FLAGS.output:
@@ -77,7 +88,8 @@ def main(_argv):
 
         image_np = np.transpose(img_in.numpy(), (1, 2, 3, 0))
         if counter == 0:
-            zinput = ctxt.image().scale(x=0.25, y=0.25).position(x=0.0, y=0.0).data(image_np).update()
+            to_fit = 0.15 / image_np.shape[2]
+            zinput = ctxt.image().data(image_np).scale(to_fit, to_fit).send_to(input_panel).update()
             zmodel = ctxt.model().keras(yolo).inputs(img_in.numpy()).update()
         else:
             zinput.data(image_np).update()
@@ -105,7 +117,8 @@ def main(_argv):
         out_img = cv2.putText(out_img, "Time: {:.2f}ms".format(sum(times)/len(times)*1000), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
 
         if counter == 0:
-            zoutput = ctxt.image().position(x=-15.0, y=0.0).scale(0.15, 0.15).data(out_img).update()
+            to_fit = 0.15 / out_img.shape[2]
+            zoutput = ctxt.image().data(out_img).scale(to_fit, to_fit).send_to(output_panel).update()
         else:
             zoutput.data(out_img).debug();
 
@@ -117,6 +130,7 @@ def main(_argv):
         if cv2.waitKey(1) == ord('q'):
             break
 
+    ctxt.disconnect()
     cv2.destroyAllWindows()
 
 
