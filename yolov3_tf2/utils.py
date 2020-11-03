@@ -109,7 +109,7 @@ def draw_outputs(img, outputs, class_names):
         img = cv2.rectangle(img, x1y1, x2y2, (255, 0, 0), 2)
         img = cv2.putText(img, '{} {:.4f}'.format(
             class_names[int(classes[i])], objectness[i]),
-            x1y1, cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+            x1y1, cv2.FONT_HERSHEY_COMPLEX, 3, (0, 0, 255), 2)
     return img
 
 
@@ -123,8 +123,7 @@ def draw_labels(x, y, class_names):
         x2y2 = tuple((np.array(boxes[i][2:4]) * wh).astype(np.int32))
         img = cv2.rectangle(img, x1y1, x2y2, (255, 0, 0), 2)
         img = cv2.putText(img, class_names[classes[i]],
-                          x1y1, cv2.FONT_HERSHEY_COMPLEX_SMALL,
-                          1, (0, 0, 255), 2)
+                          x1y1, cv2.FONT_HERSHEY_COMPLEX,2,(0,0,255),2)
     return img
 
 
