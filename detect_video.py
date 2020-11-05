@@ -61,8 +61,6 @@ def main(_argv):
 def build_class_list(scores, classes):
     scores_list = scores.numpy().tolist()
     class_list = classes.numpy().tolist()
-    print(scores_list)
-    print(class_list)
     class_list_map = []
     target_output_list = []
 
@@ -73,13 +71,9 @@ def build_class_list(scores, classes):
             target_output_list.append(target_output)
             class_list_map = []
 
-            print(target_output_list)
-            print("This is final target list of classes", target_output_list)
-
     return target_output_list, scores_list
 
 def predict(img_in, yolo, times, img, class_names):
-    t1 = time.time()
     bbox, confidence, class_probs, scores = yolo.predict(img_in)
     boxes, scores, classes, nums = tf.image.combined_non_max_suppression(
         boxes=tf.reshape(bbox, (tf.shape(bbox)[0], -1, 1, 4)),
@@ -90,13 +84,10 @@ def predict(img_in, yolo, times, img, class_names):
         iou_threshold=FLAGS.yolo_iou_threshold,
         score_threshold=FLAGS.yolo_score_threshold
     )
-    t2 = time.time()
-    times.append(t2-t1)
-    times = times[-20:]
 
     out_img = draw_outputs(img/255.0, (boxes, scores, classes, nums), class_names)
-    out_img = cv2.putText(out_img, "Time: {:.2f}ms".format(sum(times)/len(times)*1000), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
-    out_img = cv2.resize(out_img, (416, 416))
+    #out_img = cv2.putText(out_img, "Time: {:.2f}ms".format(sum(times)/len(times)*1000), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+    #out_img = cv2.resize(out_img, (416, 416))
 
     return scores, classes, out_img
 
@@ -149,35 +140,39 @@ def runner(video_file=""):
         _, img = vid.read()
 
         if img is None:
+            snapstream.serialize()
             logging.warning("Empty Frame")
             time.sleep(0.1)
-            continue
+            break
 
+        t1 = time.time_ns() / 1000000
         img_in = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img_in = tf.expand_dims(img_in, 0)
         img_in = transform_images(img_in, FLAGS.size)
 
-        image_np = np.transpose(img_in.numpy(), (1, 2, 3, 0))
-
         if counter == 0:
-            to_fit = 0.04 / image_np.shape[2]
-            zinput = ctxt.image().data(image_np).position(-0.3,-0.5, 0).scale(to_fit,to_fit*4)
-            #zmodel = ctxt.model().keras(yolo).inputs(img_in.numpy())
+            to_fit = 0.04
+            zinput = ctxt.image().data(img_in.numpy()).position(-0.3,-0.5, 0)
+            zmodel = ctxt.model().keras(yolo).inputs(img_in.numpy())
             zoutput = ctxt.image().position(0.5,-0.5, 0)
         else:
-            zinput.data(image_np)
-            #zmodel.inputs(img_in.numpy())
+            zinput.data(img_in.numpy())
+            zmodel.inputs(img_in.numpy())
 
-        if counter % 10 == 0:
-            scores, classes, out_img = predict(img_in, yolo, times, img, class_names)
-            target_output_list, scores_list = build_class_list(scores, classes)
+        t3 = time.time_ns() / 1000000
+        scores, classes, out_img = predict(img_in, yolo, times, img, class_names)
+        target_output_list, scores_list = build_class_list(scores, classes)
+        t4 = time.time_ns() / 1000000
+        print("inference time: ", t4-t3)
 
-            #z_txt_classes.text("CLASSES" +'\n'+ str(target_output_list[0][0])+'\n'+ str(target_output_list[1][0])+'\n').position(1.5, 1.7, 0).scale(0.2,0.2,0.2)
-            #z_txt_scores.text("SCORES" +'\n'+str(round(scores_list[0][0], 3))+'\n'+ str(round(scores_list[0][1], 3))+'\n').position(2.0, 1.7, 0).scale(0.2,0.2,0.2)
-            to_fit = 0.04 / out_img.shape[2]
-            zoutput.data(out_img).position(0.5,-0.5, 0).scale(to_fit, to_fit*4)
+        #z_txt_classes.text("CLASSES" +'\n'+ str(target_output_list[0][0])+'\n'+ str(target_output_list[1][0])+'\n')
+        #z_txt_scores.text("SCORES" +'\n'+str(round(scores_list[0][0], 3))+'\n'+ str(round(scores_list[0][1], 3))+'\n')
+        to_fit = 0.04
+        zoutput.data(out_img)
 
         ctxt.snapshot(stream=snapstream)
+        t2 = time.time_ns() / 1000000
+        print("total time: ", t2-t1)
         counter += 1
 
         if cv2.waitKey(1) == ord('q'):
